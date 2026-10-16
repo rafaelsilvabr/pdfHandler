@@ -54,7 +54,7 @@ image tag in `k8s/deployment.yaml` to match your cluster.
 
 ### Building from source
 
-Requires Go 1.25+, plus `ghostscript` and `poppler-utils` on `PATH`:
+Requires Go 1.26+, plus `ghostscript` and `poppler-utils` on `PATH`:
 
 ```bash
 go build -o pdfhandler .
