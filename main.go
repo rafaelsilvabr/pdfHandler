@@ -14,6 +14,10 @@ import (
 // newRouter wires the routes and middleware. Kept separate from main so tests
 // can drive the real router — middleware included — through httptest.
 func newRouter() (*gin.Engine, error) {
+	maxUploadBytes, err := uploadLimitFromEnv()
+	if err != nil {
+		return nil, err
+	}
 	r := gin.Default()
 
 	// Bounds what a multipart form buffers in RAM. The hard cap on the request
@@ -27,10 +31,11 @@ func newRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
-	r.Use(securityHeaders(), bodyLimit(handlers.MaxUploadBytes))
+	r.Use(securityHeaders(), bodyLimit(maxUploadBytes))
 
 	r.Static("/static", "./static")
 	r.StaticFile("/", "./static/index.html")
+	r.StaticFile("/about", "./static/index.html")
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -38,6 +43,10 @@ func newRouter() (*gin.Engine, error) {
 
 	api := r.Group("/api")
 	{
+		api.GET("/config", func(c *gin.Context) {
+			c.Header("Cache-Control", "no-store")
+			c.JSON(http.StatusOK, gin.H{"maxUploadBytes": maxUploadBytes})
+		})
 		api.POST("/merge", handlers.Merge)
 		api.POST("/split", handlers.Split)
 		api.POST("/compress", handlers.Compress)
@@ -90,9 +99,9 @@ func bodyLimit(max int64) gin.HandlerFunc {
 	}
 }
 
-// securityHeaders applies the baseline response headers. The CSP allows inline
-// style/script because the UI is a single self-contained page, and data: images
-// because previews are returned as base64 PNGs.
+// securityHeaders applies the baseline response headers. The UI loads local
+// assets, uses inline styles for panel visibility, and renders base64 previews
+// and blob-backed image uploads.
 func securityHeaders() gin.HandlerFunc {
 	const csp = "default-src 'self'; " +
 		"img-src 'self' data: blob:; " +
@@ -114,6 +123,10 @@ func securityHeaders() gin.HandlerFunc {
 		// Uploaded documents are private: never let a proxy or the browser keep a copy.
 		if c.Request.Method == http.MethodPost {
 			h.Set("Cache-Control", "no-store")
+		} else {
+			// Revalidate UI assets after deployment so clients receive the code
+			// that understands the active server configuration.
+			h.Set("Cache-Control", "no-cache")
 		}
 		c.Next()
 	}

@@ -110,7 +110,7 @@ this is the first place to check.
 ## 7. Frontend Choice: Single-page HTML (no framework)
 
 ### Decision
-Serve a single self-contained `index.html` from the Go binary itself.
+Serve a single-page workspace from Go, with local HTML, CSS and JavaScript files.
 No React, no Node.js build step, no separate frontend container.
 
 ### Tradeoffs
@@ -125,6 +125,26 @@ No React, no Node.js build step, no separate frontend container.
 This is a homelab tool, not a product. The UI has 8 discrete operations with
 simple forms. Vanilla JS is sufficient and eliminates a full frontend build
 pipeline and a second container. Less moving parts = fewer failure points in K8s.
+
+### Visual direction
+
+A warm cream workspace uses compact left navigation and a grouped toolkit with
+switchable list and block layouts. A narrow guide column provides context alongside the toolkit;
+tool workspaces split document previews from options and processing. On smaller
+screens, the columns stack and navigation moves behind a menu.
+
+Design tokens live in `static/styles.css`: International Klein Blue (`#002FA7`)
+is the only accent, borders are 1px, and controls use small, consistent corner
+radii. SF Pro is selected locally when available, with native system fallbacks.
+There are no remote fonts, icon libraries, gradients or drop shadows. Hover,
+focus and active states are explicit, and reduced-motion preferences are honored.
+
+The catalog supports search and category filters in both layouts. The desktop
+sidebar can be hidden from the top bar; sidebar and layout preferences are stored
+locally. An About page at `/about` uses the same shell and supports direct links,
+reloads, and browser history. Uploads and selectable previews
+work with a keyboard. Pending preview requests are canceled when files or tools
+change, and download and image object URLs are released when no longer needed.
 
 ---
 
@@ -155,8 +175,13 @@ Cleanup is always deferred at the start of each handler, so files are removed
 even if the handler returns an error early.
 
 ### Max file size
-Capped at 100 MB per request via `gin.MaxMultipartMemory`. This is configurable
-via an environment variable if needed. For homelab use, 100 MB is generous.
+Capped at 100 MiB per request by default via `http.MaxBytesReader`.
+`MAX_UPLOAD_MB` selects a positive whole number of MiB at startup; invalid values
+fail startup. `MaxMultipartMemory` remains an independent 8 MiB buffering
+threshold. The total request cap includes all files and multipart overhead.
+`GET /api/config` exposes the active byte limit to the UI, including its About
+page and file selection checks. Reverse proxy limits must be adjusted separately
+when increasing the application limit.
 
 ---
 
@@ -199,7 +224,8 @@ pdfcpu, so the request is narrowed before any of that runs:
 - **Parameter validation** — `degrees` must be a non-zero multiple of 90,
   `pages` must be numbers or ranges, `span`/`limit` must be positive and
   bounded, `quality`/`format`/`dpi` are allow-listed. Rejected, not coerced.
-- **Size** — the whole request body is capped at 100 MB via
+- **Size** — the whole request body is capped at 100 MiB by default (configurable
+  using `MAX_UPLOAD_MB`) via
   `http.MaxBytesReader`; `MaxMultipartMemory` alone only decides how much is
   buffered in RAM before the rest spills to disk. Oversize uploads get a 413.
 - **Time** — every ghostscript/poppler run is bounded by a 90 s timeout tied to
@@ -227,8 +253,9 @@ This is the primary access method for homelab convenience.
 ### Ingress: nginx
 `pdf.home.lab` hostname via nginx-ingress for clean URL access.
 Requires local DNS entry or `/etc/hosts` to point `pdf.home.lab` to the cluster IP.
-`nginx.ingress.kubernetes.io/proxy-body-size: "100m"` annotation added to allow
-large PDF uploads (nginx default is 1 MB).
+`nginx.ingress.kubernetes.io/proxy-body-size: "100m"` matches the default
+`MAX_UPLOAD_MB=100`; update both settings when changing the limit (nginx's
+default is 1 MB).
 
 ### Tradeoff: NodePort vs LoadBalancer
 `LoadBalancer` type requires a cloud provider or MetalLB in homelab.
@@ -296,7 +323,9 @@ pdfHandler/
 ├── scripts/
 │   └── smoke.sh             # Functional test against a running instance
 ├── static/
-│   └── index.html           # Self-contained SPA (HTML + CSS + JS)
+│   ├── index.html           # Workspace markup and option panels
+│   ├── styles.css           # Tokens, responsive layouts and interaction states
+│   └── app.js               # Navigation, tool catalog and document workflows
 ├── .github/workflows/
 │   └── ci.yml               # Build/test, govulncheck, container smoke test
 ├── Dockerfile
@@ -320,8 +349,8 @@ parser the handlers use and there is nothing binary to review in a diff.
 
 What that cannot reach is the artifact that ships: the image build, the bundled
 ghostscript and poppler, the response headers as an HTTP client sees them, and
-the 100 MB body cap, which is impractical to assert in a unit test but trivial
-over a socket. `scripts/smoke.sh` covers those against a running container, and
+the deployed body cap over a socket. Unit tests also check the body cap with
+small custom limits. `scripts/smoke.sh` covers the deployed application, and
 CI runs it under the same constraints as the Deployment — non-root, read-only
 root filesystem, capabilities dropped — so a change that quietly needs to write
 outside `/tmp` fails the build instead of the cluster.

@@ -8,7 +8,7 @@ Files are processed in a temp directory and deleted when the response is sent.
 
 Built for a homelab Kubernetes cluster, but it runs anywhere Docker does.
 
-![The PDF Handler home screen: a grid of cards for merge, split, compress, rotate, PDF-to-image, image-to-PDF, protect and unlock](images/ui.png)
+![The PDF Handler workspace: a cream interface with grouped PDF tool rows, compact navigation and a privacy guide](images/ui.png)
 
 ## Features
 
@@ -23,6 +23,16 @@ Built for a homelab Kubernetes cluster, but it runs anywhere Docker does.
 | **Protect** | Encrypt a PDF with a password |
 | **Unlock** | Remove password protection |
 | **Preview** | Page count plus base64 thumbnails, used by the UI |
+
+The responsive workspace includes tool search (press `/`), category filters,
+list and block layouts, keyboard-accessible page selection, and a compact
+navigation menu on mobile. The top-bar toggle hides or restores the desktop
+sidebar; layout and sidebar preferences are remembered in your browser.
+The About page at `/about` explains the project, file handling, and license.
+It uses a warm cream palette, fine borders, and International Klein Blue
+(`#002FA7`) for actions and selection. SF Pro is used when installed, with native
+system fonts as fallbacks. All fonts, icons and UI assets stay local; no CDN or
+frontend build step is required. Motion respects reduced-motion preferences.
 
 ## Quick start
 
@@ -75,7 +85,7 @@ go test -race -cover ./...
 
 **A functional smoke test** drives a running instance over HTTP and checks what
 unit tests can't: the built container, its bundled tools, the response headers,
-and the 100 MB body cap end to end.
+and the configured request body cap end to end.
 
 ```bash
 docker build -t pdfhandler .
@@ -95,16 +105,41 @@ the cluster. `govulncheck` runs as a separate job.
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `8080` | Port to listen on |
+| `MAX_UPLOAD_MB` | `100` | Maximum total upload request size in MiB (1 MiB = 1,048,576 bytes), including all files and multipart form overhead |
 | `GIN_MODE` | `debug` | Set to `release` outside development |
 | `HOME` | — | pdfcpu resolves its config dir from this; the image sets it to `/tmp` so it works as a non-root user |
 
+Set the limit when starting the container, without rebuilding the image:
+
+```bash
+docker run --rm -p 8080:8080 -e MAX_UPLOAD_MB=250 pdfhandler
+```
+
+For Kubernetes, change `MAX_UPLOAD_MB` in `k8s/deployment.yaml`, or update an
+existing Deployment (which rolls out new pods):
+
+```bash
+kubectl -n pdfhandler-ns set env deployment/pdfhandler MAX_UPLOAD_MB=250
+kubectl -n pdfhandler-ns annotate ingress/pdfhandler-ingress \
+  nginx.ingress.kubernetes.io/proxy-body-size=250m --overwrite
+```
+
+Keep the ingress or other reverse proxy's body limit at least as large as the
+application limit; a smaller proxy limit rejects uploads before they reach the
+app. Review memory and `/tmp` capacity when increasing it. Values must be positive
+whole numbers; invalid or overflowing values prevent startup. Changes take effect
+after a restart. The UI reads the active limit from `GET /api/config` and uses it
+for the upload hints, About page, and file selection checks. UI labels use MB
+for these binary units, matching the server's error messages.
+
 ## API
 
-All endpoints take `multipart/form-data` and return the resulting file as an
-attachment, except `/api/preview` (JSON) and `/healthz`.
+Operation endpoints take `multipart/form-data` and return the resulting file as
+an attachment, except `/api/preview` (JSON). Configuration and health use GET.
 
 | Endpoint | Form fields | Returns |
 |---|---|---|
+| `GET /api/config` | — | JSON: `maxUploadBytes` (active request body limit) |
 | `POST /api/merge` | `files[]` (2–50 PDFs) | `merged.pdf` |
 | `POST /api/split` | `file`, `span` (pages per chunk) | `split.zip` |
 | `POST /api/compress` | `file`, `quality` (`screen`\|`ebook`\|`printer`\|`prepress`) | `compressed.pdf` |
@@ -135,7 +170,8 @@ requests are narrowed before any of that runs:
   allow-listed extension, derived from `filepath.Base` and pattern-matched
   rather than taken from `filepath.Ext` directly.
 - Parameters are validated and rejected, not coerced.
-- The request body is capped at 100 MB via `http.MaxBytesReader`; oversize
+- The request body is capped via `http.MaxBytesReader` (100 MiB by default,
+  configurable with `MAX_UPLOAD_MB`); oversize
   uploads get a 413.
 - Each ghostscript/poppler run is bounded by a 90 s timeout tied to the request
   context, and ghostscript runs with `-dSAFER`.
@@ -173,7 +209,9 @@ alternatives considered, and the Kubernetes design.
 main.go              Routing, middleware, server timeouts
 handlers/            One file per operation; util.go holds the shared
                      validation, sandboxing and error helpers
-static/index.html    The entire UI — HTML, CSS and JS in one file
+static/index.html    Workspace markup and tool option panels
+static/styles.css    Design tokens, responsive layouts and interaction states
+static/app.js        Tool catalog, navigation, uploads, previews and processing
 k8s/                 Namespace, Deployment, Service, Ingress
 ```
 
@@ -206,7 +244,8 @@ Each operation is one file in `handlers/`. To add one:
 3. Add tests to both layers: the rejection cases in
    `handlers/validation_test.go`, the happy path in
    `handlers/operations_test.go`, and a line in `scripts/smoke.sh`.
-4. Add a card to the UI in `static/index.html`, and a row to the API table here.
+4. Add the tool definition and icon in `static/app.js`, any options in
+   `static/index.html`, and a row to the API table here.
 
 ### What review will look for
 

@@ -316,13 +316,13 @@ func TestFailUploadMapsOversizeTo413(t *testing.T) {
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/compress", nil)
 
-	failUpload(c, &http.MaxBytesError{Limit: MaxUploadBytes}, "PDF file required")
+	failUpload(c, &http.MaxBytesError{Limit: 25 << 20}, "PDF file required")
 
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("failUpload with MaxBytesError = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
 	}
-	if !strings.Contains(rec.Body.String(), "too large") {
-		t.Errorf("413 body should say the upload was too large, got: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "upload too large: the limit is 25 MB") {
+		t.Errorf("413 body should include the actual limit, got: %s", rec.Body.String())
 	}
 }
 

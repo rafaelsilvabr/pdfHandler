@@ -4,7 +4,8 @@ metadata:
   name: pdfhandler-ingress
   namespace: pdfhandler-ns
   annotations:
-    # nginx default is 1 MB — override to allow large PDF uploads
+    # Keep this at least as large as MAX_UPLOAD_MB in deployment.yaml.
+    # nginx default is 1 MB — override to allow large PDF uploads.
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"

@@ -2,7 +2,7 @@
 #
 # Functional smoke test: drives a running PDF Handler over HTTP and checks each
 # endpoint end to end, plus the rejections that only show up in a real request
-# (the 100 MB body cap, the response headers, the container's own ghostscript
+# (the configured body cap, the response headers, the container's own ghostscript
 # and poppler). The Go tests cover the handlers in isolation; this covers the
 # thing that actually ships.
 #
@@ -101,10 +101,16 @@ check "merge needs two files"  400 -F "files[]=@$WORK/a.pdf"                    
 
 echo
 echo "==> Body limit"
-# 120 MB against a 100 MB cap. This is the check the Go tests cannot do cheaply.
-head -c 120000000 /dev/zero > "$WORK/big.pdf"
-check "120 MB upload"          413 -F "file=@$WORK/big.pdf"                      "$BASE/api/compress"
-expect_body "413 explains the limit" "too large"
+# Read the deployed setting so this also works with MAX_UPLOAD_MB overrides.
+check "upload configuration" 200 "$BASE/api/config"
+upload_limit="$(sed -n 's/.*"maxUploadBytes":\([0-9]*\).*/\1/p' "$WORK/out")"
+if [[ ! "$upload_limit" =~ ^[1-9][0-9]*$ ]]; then
+  echo "  FAIL  invalid upload configuration" >&2
+  exit 1
+fi
+head -c "$((upload_limit + 1048576))" /dev/zero > "$WORK/big.pdf"
+check "upload above configured limit" 413 -F "file=@$WORK/big.pdf" "$BASE/api/compress"
+expect_body "413 explains the limit" "limit is $((upload_limit / 1048576)) MB"
 rm -f "$WORK/big.pdf"
 
 echo

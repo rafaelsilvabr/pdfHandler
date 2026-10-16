@@ -20,11 +20,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// MaxUploadBytes caps the size of a whole request body. Gin's
-// MaxMultipartMemory only bounds what is buffered in RAM — everything past it
-// spills to disk, so without this an upload can fill the container's disk.
-const MaxUploadBytes = 100 << 20 // 100 MB
-
 // execTimeout bounds each external converter run. A malformed or crafted PDF
 // can keep ghostscript or pdftoppm busy indefinitely, which would pin a worker
 // and the CPU limit for as long as the client cares to wait.
@@ -139,7 +134,7 @@ func failUpload(c *gin.Context, err error, publicMsg string) {
 	var maxBytes *http.MaxBytesError
 	if errors.As(err, &maxBytes) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-			"error": fmt.Sprintf("upload too large: the limit is %d MB", MaxUploadBytes>>20),
+			"error": fmt.Sprintf("upload too large: the limit is %d MB", maxBytes.Limit>>20),
 		})
 		return
 	}

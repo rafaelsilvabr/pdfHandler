@@ -54,6 +54,10 @@ spec:
               memory: "512Mi"
               cpu: "1000m"
           env:
+            # Total request size in MiB (files plus multipart form overhead).
+            # Keep the ingress proxy-body-size at least this high.
+            - name: MAX_UPLOAD_MB
+              value: "100"
             - name: GIN_MODE
               value: release
             - name: HOME

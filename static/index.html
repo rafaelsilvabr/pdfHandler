@@ -3,997 +3,152 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PDF Handler</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --primary:       #7c3aed;
-      --primary-dark:  #6d28d9;
-      --primary-light: #ede9fe;
-      --bg:            #f8fafc;
-      --card:          #ffffff;
-      --text:          #1e293b;
-      --muted:         #64748b;
-      --border:        #e2e8f0;
-      --success:       #10b981;
-      --error:         #ef4444;
-      --radius:        12px;
-      --shadow:        0 2px 12px rgba(0,0,0,0.08);
-      --shadow-hover:  0 8px 24px rgba(124,58,237,0.18);
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    /* ── Header ── */
-    header {
-      background: linear-gradient(135deg, #4c1d95, #7c3aed);
-      color: #fff;
-      padding: 1.5rem 2rem;
-      text-align: center;
-    }
-    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
-    header p  { margin-top: 0.4rem; opacity: 0.85; font-size: 0.95rem; }
-
-    /* ── Layout ── */
-    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
-
-    /* ── Tool grid ── */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1.25rem;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.5rem 1.25rem;
-      cursor: pointer;
-      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.6rem;
-    }
-    .card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-hover);
-      border-color: var(--primary);
-    }
-    .card .icon {
-      width: 44px; height: 44px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.4rem;
-    }
-    .card h3 { font-size: 0.95rem; font-weight: 600; }
-    .card p  { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-
-    /* ── Tool panel ── */
-    #tool-panel { display: none; }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1.75rem;
-    }
-    .back-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.4rem 0.85rem;
-      cursor: pointer;
-      font-size: 0.85rem;
-      color: var(--muted);
-      transition: background 0.15s;
-      flex-shrink: 0;
-    }
-    .back-btn:hover { background: var(--border); }
-    .panel-title { display: flex; align-items: center; gap: 0.7rem; }
-    .panel-title .icon { width: 40px; height: 40px; border-radius: 10px; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; }
-    .panel-title h2 { font-size: 1.3rem; font-weight: 700; }
-    .panel-title p  { font-size: 0.85rem; color: var(--muted); }
-
-    /* ── Workspace: two-column layout ── */
-    .tool-workspace {
-      display: grid;
-      grid-template-columns: 1fr 300px;
-      gap: 1.5rem;
-      align-items: start;
-    }
-    @media (max-width: 720px) {
-      .tool-workspace { grid-template-columns: 1fr; }
-    }
-
-    /* ── Left column: upload + preview ── */
-    .workspace-left {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      min-width: 0;
-    }
-
-    /* ── Drop zone ── */
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: var(--radius);
-      padding: 2rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .drop-zone.dragover, .drop-zone:hover {
-      border-color: var(--primary);
-      background: var(--primary-light);
-    }
-    .drop-zone.has-files {
-      padding: 0.9rem;
-      border-style: solid;
-      border-color: var(--primary);
-      background: var(--primary-light);
-    }
-    .drop-zone .dz-icon { font-size: 2rem; margin-bottom: 0.4rem; }
-    .drop-zone.has-files .dz-icon { font-size: 1.2rem; margin: 0; }
-    .drop-zone p { color: var(--muted); font-size: 0.88rem; }
-    .drop-zone.has-files p { font-size: 0.8rem; }
-    .drop-zone strong { color: var(--primary); }
-    #file-input { display: none; }
-
-    /* ── File list ── */
-    .file-list { display: flex; flex-direction: column; gap: 0.4rem; }
-    .file-item {
-      display: flex; align-items: center; gap: 0.5rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.85rem;
-    }
-    .file-thumb {
-      width: 28px; height: 36px;
-      object-fit: cover;
-      border-radius: 3px;
-      flex-shrink: 0;
-      border: 1px solid var(--border);
-    }
-    .file-thumb-placeholder {
-      width: 28px; height: 36px;
-      background: var(--bg);
-      border-radius: 3px;
-      flex-shrink: 0;
-      border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem; color: var(--muted);
-    }
-    .file-item .fname { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .file-item .fsize { color: var(--muted); font-size: 0.78rem; flex-shrink: 0; }
-    .remove-file { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0 0.2rem; transition: color 0.15s; flex-shrink: 0; }
-    .remove-file:hover { color: var(--error); }
-
-    /* ── Preview area ── */
-    #preview-area { display: none; }
-    .preview-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 0.6rem;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-    .preview-bar .preview-label { font-size: 0.82rem; color: var(--muted); }
-    .preview-bar .select-hint {
-      font-size: 0.78rem;
-      color: var(--primary);
-      font-weight: 600;
-      display: none;
-    }
-    .preview-bar .preview-actions { display: flex; gap: 0.4rem; }
-    .preview-bar .preview-actions button {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--card);
-      cursor: pointer;
-      color: var(--muted);
-      transition: background 0.15s, color 0.15s;
-      display: none;
-    }
-    .preview-bar .preview-actions button:hover { background: var(--primary-light); color: var(--primary); }
-
-    .preview-loading {
-      display: flex; align-items: center; gap: 0.5rem;
-      color: var(--muted); font-size: 0.85rem; padding: 1rem 0;
-    }
-
-    /* ── Thumbnails grid ── */
-    .thumbs-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-      gap: 8px;
-      max-height: 420px;
-      overflow-y: auto;
-      padding-right: 2px;
-    }
-    .thumbs-grid::-webkit-scrollbar { width: 4px; }
-    .thumbs-grid::-webkit-scrollbar-track { background: var(--bg); }
-    .thumbs-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    .thumb {
-      border: 2px solid var(--border);
-      border-radius: 6px;
-      overflow: hidden;
-      background: var(--card);
-      transition: border-color 0.15s, box-shadow 0.15s;
-      position: relative;
-    }
-    .thumb.selectable { cursor: pointer; }
-    .thumb.selectable:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(124,58,237,0.2); }
-    .thumb.selected { border-color: var(--primary); box-shadow: 0 2px 8px rgba(124,58,237,0.25); }
-    .thumb.selected::after {
-      content: '✓';
-      position: absolute; top: 3px; right: 3px;
-      width: 18px; height: 18px;
-      background: var(--primary);
-      color: #fff;
-      border-radius: 50%;
-      font-size: 0.65rem;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700;
-    }
-    /* Split group highlight */
-    .thumb.split-group-a { border-color: #3b82f6; }
-    .thumb.split-group-b { border-color: #f59e0b; }
-    .thumb img { width: 100%; display: block; }
-    .thumb-num {
-      text-align: center;
-      font-size: 0.68rem;
-      padding: 2px 4px;
-      background: var(--bg);
-      color: var(--muted);
-    }
-    .thumb.selected .thumb-num { background: var(--primary-light); color: var(--primary); font-weight: 600; }
-
-    /* ── Right column: options + process ── */
-    .workspace-right {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      position: sticky;
-      top: 1rem;
-    }
-    .workspace-right h4 {
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: -0.5rem;
-    }
-
-    /* ── Options ── */
-    .option-group { display: flex; flex-direction: column; gap: 0.35rem; }
-    .option-group label { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .option-group select,
-    .option-group input[type="text"],
-    .option-group input[type="number"],
-    .option-group input[type="password"] {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.9rem;
-      background: var(--bg);
-      outline: none;
-      transition: border-color 0.15s;
-      width: 100%;
-    }
-    .option-group select:focus,
-    .option-group input:focus { border-color: var(--primary); }
-    .option-hint { font-size: 0.75rem; color: var(--muted); margin-top: -0.1rem; }
-
-    /* ── Buttons ── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-      padding: 0.7rem 1.2rem;
-      border-radius: 8px;
-      border: none;
-      font-size: 0.92rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.18s, transform 0.1s;
-      width: 100%;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-dark); }
-    .btn-primary:disabled { background: #a78bfa; cursor: not-allowed; }
-    .btn-success { background: var(--success); color: #fff; }
-    .btn-success:hover { background: #059669; }
-
-    /* ── Result ── */
-    .result-box {
-      border-radius: 8px;
-      padding: 0.9rem;
-      display: flex; flex-direction: column; gap: 0.6rem;
-    }
-    .result-success { background: #d1fae5; border: 1px solid #6ee7b7; }
-    .result-error   { background: #fee2e2; border: 1px solid #fca5a5; }
-    .result-box strong { font-size: 0.88rem; }
-    .result-box span  { font-size: 0.78rem; color: var(--muted); word-break: break-word; }
-
-    /* ── Spinner ── */
-    .spinner {
-      display: inline-block;
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,0.4);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
-    }
-    .spinner.dark {
-      border-color: rgba(100,116,139,0.3);
-      border-top-color: var(--muted);
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <meta name="theme-color" content="#faf9f6" />
+  <meta name="description" content="A quiet workspace for your documents. Eight self-hosted PDF tools, with files processed on your own server." />
+  <title>PDF Handler — The document workspace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23252620'/%3E%3Cpath d='M10 7h8l5 5v13H10zM18 7v6h5M13 17h7M13 21h5' fill='none' stroke='%23faf9f6' stroke-width='1.5'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="/static/app.js?v=upload-limit" defer></script>
 </head>
 <body>
-
-<header>
-  <h1>PDF Handler</h1>
-  <p>Self-hosted PDF tools — your files never leave your server</p>
-</header>
-
-<div class="container">
-
-  <!-- Home: tool grid -->
-  <section id="home-view">
-    <div class="grid" id="tools-grid"></div>
-  </section>
-
-  <!-- Tool panel -->
-  <section id="tool-panel">
-    <div class="panel-header">
-      <button class="back-btn" id="back-btn">&#8592; Back</button>
-      <div class="panel-title">
-        <div class="icon" id="panel-icon"></div>
-        <div>
-          <h2 id="panel-title-text"></h2>
-          <p id="panel-desc-text"></p>
-        </div>
-      </div>
+<a class="skip-link" href="#main-content">Skip to workspace</a>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
+    <button class="brand" id="brand-home" aria-label="PDF Handler, all tools">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 28"><path d="M5 2h9l5 5v19H5zM14 2v6h5M9 13h6M9 17h6M9 21h4" /></svg></span>
+      <span><span class="brand-name">PDF Handler<span aria-hidden="true">.</span></span><span class="brand-caption">THE DOCUMENT WORKSPACE</span></span>
+    </button>
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle tool navigation" aria-expanded="false" aria-controls="sidebar-nav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+    <nav class="sidebar-nav" id="sidebar-nav" aria-label="PDF tools">
+      <button class="nav-item" id="nav-overview" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>All tools<span class="nav-count">08</span></button>
+      <div id="tool-navigation"></div>
+      <div class="nav-secondary"><a class="nav-item" id="nav-about" href="/about" data-page="about"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v6m0-10v.01"/></svg>About PDF Handler</a></div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="server-note"><span class="status-dot" aria-hidden="true"></span>Your server. Your files.</div>
+      <p>Self-hosted by design.<br />Private by default.</p>
+      <div class="edition"><span>PDF HANDLER</span><span>LOCAL EDITION</span></div>
     </div>
+  </aside>
 
-    <div class="tool-workspace">
-
-      <!-- Left: upload + preview -->
-      <div class="workspace-left">
-
-        <!-- Drop zone -->
-        <div class="drop-zone" id="drop-zone">
-          <div class="dz-icon">&#128196;</div>
-          <p><strong>Click to select</strong> or drag and drop</p>
-          <p id="dz-hint" style="margin-top:0.25rem;font-size:0.76rem;color:var(--muted)"></p>
+  <main class="main" id="main-content" tabindex="-1">
+    <header class="topbar">
+      <div class="topbar-leading">
+        <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Hide sidebar" title="Hide sidebar" aria-expanded="true" aria-controls="sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m-3-9v2"/></svg></button>
+        <div class="breadcrumb"><span>Workspace</span><span class="separator" aria-hidden="true">/</span><span id="breadcrumb-current">All tools</span></div>
+      </div>
+      <div class="topbar-meta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5" /></svg>SELF-HOSTED &amp; PRIVATE</div>
+    </header>
+    <div class="container">
+      <section id="home-view" aria-labelledby="home-title">
+        <div class="hero">
+          <div><p class="eyebrow">A little order. A lot less effort.</p><h1 id="home-title" tabindex="-1">Your documents.<br /><span>In good order.</span></h1></div>
+          <p class="hero-copy">Everyday PDF tools, in one considered workspace. Choose a tool and make room for the work that matters.</p>
         </div>
-        <input type="file" id="file-input" />
+        <div class="home-layout">
+          <div class="catalog">
+            <div class="catalog-toolbar">
+              <h2 class="catalog-title">The toolkit <span id="tool-count">/ 08</span></h2>
+              <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="tool-search" type="search" placeholder="Find a tool…" aria-label="Find a tool" autocomplete="off" /><kbd aria-hidden="true">/</kbd></label>
+            </div>
+            <div class="catalog-controls">
+              <div class="filters" role="group" aria-label="Filter tools">
+                <button class="filter" data-category="all" aria-pressed="true">All tools</button>
+                <button class="filter" data-category="organize" aria-pressed="false">Organize</button>
+                <button class="filter" data-category="convert" aria-pressed="false">Convert</button>
+                <button class="filter" data-category="security" aria-pressed="false">Security</button>
+              </div>
+              <div class="view-switch" role="group" aria-label="Tool layout">
+                <button class="view-option" data-layout="list" aria-pressed="true" type="button" title="List view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>List</button>
+                <button class="view-option" data-layout="blocks" aria-pressed="false" type="button" title="Block view"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Blocks</button>
+              </div>
+            </div>
+            <div id="tools-grid"></div>
+            <div class="empty-state" id="empty-state" hidden><h3>No tools found</h3><p>Try a different name or explore the full toolkit.</p><button class="text-button" id="clear-search">Show all tools</button></div>
+            <span id="search-status" class="sr-only" role="status"></span>
+          </div>
+          <aside class="workspace-note" aria-label="About this workspace">
+            <p class="eyebrow">Made for your peace of mind</p>
+            <div class="document-study" aria-hidden="true">
+              <svg viewBox="0 0 230 160"><path d="M20 138h190" stroke-dasharray="2 5"/><path d="M49 125V35h63l17 17v73zM112 35v18h17M61 68h41M61 77h33M61 86h39M61 105h21"/><path d="M82 138V16h73l20 20v102z" fill="var(--bg)" class="blue"/><path d="M155 16v21h20M98 56h27M98 65h58M98 74h58M98 83h44M98 105h22M98 113h34" class="blue"/><path d="M142 101h17v20h-17z" class="blue"/><path d="M150 97v28M138 111h25" class="blue"/><path d="M31 19v8M27 23h8M193 80v8M189 84h8"/></svg>
+            </div>
+            <h2 class="note-heading">Good tools.<br />Quietly private.</h2>
+            <p class="note-copy">Your files stay on your server and are deleted after processing. Just you, your documents, and a little less friction.</p>
+            <div class="privacy-line"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="10" width="12" height="10" rx="1"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>NO ACCOUNTS. NO CLOUD.</div>
+            <div class="guide">
+              <button class="guide-toggle" id="guide-toggle" aria-expanded="true" aria-controls="guide-content">A simple way to work<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+              <div class="guide-content is-open" id="guide-content"><div><ol><li><div><strong>Choose your tool</strong>One task. The right tool for it.</div></li><li><div><strong>Make it yours</strong>Add files and adjust your options.</div></li><li><div><strong>Take it from here</strong>Process, download, and carry on.</div></li></ol></div></div>
+            </div>
+          </aside>
+        </div>
+      </section>
 
-        <!-- File list -->
-        <div class="file-list" id="file-list"></div>
-
-        <!-- Preview area -->
-        <div id="preview-area">
-          <div class="preview-bar">
-            <span class="preview-label" id="preview-label"></span>
-            <span class="select-hint" id="select-hint">Click pages to select</span>
-            <div class="preview-actions">
-              <button id="select-all-btn" onclick="selectAllPages()">Select all</button>
-              <button id="clear-sel-btn" onclick="clearPageSelection()">Clear</button>
+      <section id="about-view" aria-labelledby="about-title" hidden>
+        <div class="hero about-hero">
+          <div><p class="eyebrow">About PDF Handler</p><h1 id="about-title" tabindex="-1">Small tools.<br /><span>A simpler workday.</span></h1></div>
+          <p class="hero-copy">A self-hosted home for the everyday document tasks. Built to be useful, easy to run, and entirely yours.</p>
+        </div>
+        <div class="about-layout">
+          <div class="about-story">
+            <p class="eyebrow">01 / The idea</p>
+            <h2>A workspace that stays yours.</h2>
+            <p>PDF Handler brings eight focused document tools into one quiet workspace. Merge a report, split a long document, compress an attachment, or put a page the right way up.</p>
+            <p>Originally built for a homelab, it runs on your own infrastructure. One small application serves the tools and the interface, with no accounts to create or external services to connect.</p>
+            <div class="about-principles">
+              <div class="about-principle"><span class="about-number">01</span><div><h3>Everyday work, covered.</h3><p>Merge, split, compress, rotate, convert images, protect, and unlock. Each tool does one useful job.</p></div></div>
+              <div class="about-principle"><span class="about-number">02</span><div><h3>Your infrastructure. Your control.</h3><p>Documents are processed by the server running this instance. You choose where that server lives and who can reach it.</p></div></div>
+              <div class="about-principle"><span class="about-number">03</span><div><h3>Only here while you need it.</h3><p>Uploaded files are handled in temporary storage and deleted when the request completes. Save the result wherever you keep your documents.</p></div></div>
             </div>
           </div>
-          <div id="preview-loading" class="preview-loading" style="display:none">
-            <span class="spinner dark"></span> Generating preview...
+          <aside class="about-details" aria-label="Project details">
+            <p class="eyebrow">02 / At a glance</p>
+            <dl class="about-facts"><div><dt>Toolkit</dt><dd>8 PDF tools</dd></div><div><dt>Upload limit</dt><dd><span data-upload-limit>Loading…</span> / request</dd></div><div><dt>Hosting</dt><dd>Your own server</dd></div><div><dt>License</dt><dd>MIT · open source</dd></div></dl>
+            <div class="about-credits"><h2>Made to be yours.</h2><p>Created by Rafael Silva. Open source, so you can inspect it, adapt it, and run it on your terms.</p><a class="about-source" href="https://github.com/rafaelsilvabr/pdfHandler" target="_blank" rel="noopener noreferrer">Explore the project<span class="sr-only"> (opens in a new tab)</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a></div>
+            <button class="btn btn-primary" id="about-tools-btn" type="button">Back to the toolkit<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+          </aside>
+        </div>
+        <div class="about-foundation"><span class="eyebrow">Built on good foundations</span><p>Go <span> / </span> Gin <span> / </span> pdfcpu <span> / </span> Ghostscript <span> / </span> Poppler</p></div>
+      </section>
+
+      <section id="tool-panel" aria-labelledby="panel-title-text">
+        <div class="panel-header">
+          <button class="back-btn" id="back-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4m6-6-6 6 6 6"/></svg>All tools</button>
+          <div class="panel-title"><div class="tool-icon" id="panel-icon" aria-hidden="true"></div><div><h1 id="panel-title-text" tabindex="-1"></h1><p id="panel-desc-text"></p></div></div>
+        </div>
+        <div class="tool-workspace">
+          <div class="workspace-left">
+            <div class="section-label"><span>01 / Your documents</span><span id="file-count">No files selected</span></div>
+            <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="Select files or drag and drop">
+              <div class="dz-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M9 21H6a4 4 0 0 1-1-8 9 9 0 0 1 17-3 6 6 0 0 1 3 11h-2M16 28V14m-5 5 5-5 5 5"/></svg></div>
+              <p><strong>Choose files</strong> or drop them here</p><p id="dz-hint"></p>
+            </div>
+            <input type="file" id="file-input" aria-label="Select documents" />
+            <div class="file-list" id="file-list"></div>
+            <div id="preview-area">
+              <div class="preview-bar"><span id="preview-label" role="status"></span><span class="select-hint" id="select-hint">Select pages to rotate</span><div class="preview-actions"><button id="select-all-btn">Select all</button><button id="clear-sel-btn">Clear</button></div></div>
+              <div id="preview-loading" class="preview-loading" style="display:none" role="status"><span class="spinner dark" aria-hidden="true"></span>Preparing your preview…</div>
+              <div class="thumbs-grid" id="thumbs-grid"></div>
+            </div>
           </div>
-          <div class="thumbs-grid" id="thumbs-grid"></div>
-        </div>
-
-      </div>
-
-      <!-- Right: options + process -->
-      <div class="workspace-right">
-
-        <h4>Options</h4>
-
-        <!-- Split options -->
-        <div id="opt-split" class="option-group" style="display:none">
-          <label>Pages per file</label>
-          <input type="number" id="split-span" value="1" min="1" />
-          <span class="option-hint">1 = one page per file. Preview highlights groupings.</span>
-        </div>
-
-        <!-- Compress options -->
-        <div id="opt-compress" class="option-group" style="display:none">
-          <label>Quality</label>
-          <select id="compress-quality">
-            <option value="screen">Screen (~72 dpi, smallest)</option>
-            <option value="ebook" selected>eBook (~150 dpi, balanced)</option>
-            <option value="printer">Printer (~300 dpi, high)</option>
-            <option value="prepress">Prepress (~300 dpi, best)</option>
-          </select>
-        </div>
-
-        <!-- Rotate options -->
-        <div id="opt-rotate" style="display:none">
-          <div class="option-group">
-            <label>Degrees</label>
-            <select id="rotate-degrees">
-              <option value="90">90° clockwise</option>
-              <option value="180">180°</option>
-              <option value="270">270° counter-clockwise</option>
-            </select>
-          </div>
-          <div class="option-group" style="margin-top:0.75rem">
-            <label>Pages</label>
-            <input type="text" id="rotate-pages" value="all" placeholder="all  or  1,3,5" />
-            <span class="option-hint">Click thumbnails to select pages.</span>
+          <div class="workspace-right">
+            <h2>02 / Make it yours</h2>
+            <div id="opt-split" class="option-group" style="display:none"><label for="split-span">Pages per file</label><input type="number" id="split-span" value="1" min="1" /><span class="option-hint">Each group becomes a separate PDF. Alternating borders show the groups.</span></div>
+            <div id="opt-compress" class="option-group" style="display:none"><label for="compress-quality">Quality</label><select id="compress-quality"><option value="screen">Screen · 72 dpi / smallest</option><option value="ebook" selected>eBook · 150 dpi / balanced</option><option value="printer">Printer · 300 dpi / high</option><option value="prepress">Prepress · 300 dpi / best</option></select><span class="option-hint">Lower quality creates a smaller file.</span></div>
+            <div id="opt-rotate" style="display:none"><div class="option-group"><label for="rotate-degrees">Rotation</label><select id="rotate-degrees"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° counterclockwise</option></select></div><div class="option-group" style="margin-top:18px"><label for="rotate-pages">Pages</label><input type="text" id="rotate-pages" value="all" placeholder="all, or 1,3,5-7" /><span class="option-hint">Enter a range or select pages in the preview.</span></div></div>
+            <div id="opt-pdf-to-image" style="display:none"><div class="option-group"><label for="pti-format">Image format</label><select id="pti-format"><option value="png">PNG</option><option value="jpg">JPG</option></select></div><div class="option-group" style="margin-top:18px"><label for="pti-dpi">Resolution</label><select id="pti-dpi"><option value="72">72 dpi · screen</option><option value="150" selected>150 dpi · balanced</option><option value="300">300 dpi · print</option></select></div></div>
+            <div id="opt-protect" class="option-group" style="display:none"><label for="protect-password">Set a password</label><input type="password" id="protect-password" placeholder="Enter a password" autocomplete="new-password" /><span class="option-hint">You will need this password to open the file.</span></div>
+            <div id="opt-unlock" class="option-group" style="display:none"><label for="unlock-password">Current password</label><input type="password" id="unlock-password" placeholder="Enter the current password" autocomplete="off" /></div>
+            <div id="opt-none" class="no-options" style="display:none"></div>
+            <div class="process-summary"><span>Output</span><span id="output-format">PDF document</span></div>
+            <button class="btn btn-primary" id="process-btn" disabled>Process document</button>
+            <p class="process-note">Up to <span data-upload-limit>Loading…</span> per request.<br />Files are removed from the server after processing.</p>
+            <div id="result" role="status" aria-live="polite" aria-atomic="true" style="display:none"></div>
           </div>
         </div>
-
-        <!-- PDF to image options -->
-        <div id="opt-pdf-to-image" style="display:none">
-          <div class="option-group">
-            <label>Format</label>
-            <select id="pti-format">
-              <option value="png" selected>PNG</option>
-              <option value="jpg">JPG</option>
-            </select>
-          </div>
-          <div class="option-group" style="margin-top:0.75rem">
-            <label>DPI</label>
-            <select id="pti-dpi">
-              <option value="72">72 dpi (screen)</option>
-              <option value="150" selected>150 dpi (balanced)</option>
-              <option value="300">300 dpi (print)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Protect options -->
-        <div id="opt-protect" class="option-group" style="display:none">
-          <label>Password</label>
-          <input type="password" id="protect-password" placeholder="Enter password" autocomplete="new-password" />
-        </div>
-
-        <!-- Unlock options -->
-        <div id="opt-unlock" class="option-group" style="display:none">
-          <label>Current password</label>
-          <input type="password" id="unlock-password" placeholder="Enter current password" autocomplete="current-password" />
-        </div>
-
-        <!-- No options for merge and image-to-pdf -->
-        <div id="opt-none" style="display:none">
-          <span style="font-size:0.82rem;color:var(--muted)">No options needed. Add your files and press Process.</span>
-        </div>
-
-        <button class="btn btn-primary" id="process-btn" disabled>Process</button>
-
-        <!-- Result -->
-        <div id="result" style="display:none"></div>
-
-      </div>
-
+      </section>
+      <footer class="page-footer"><span>A little less paperwork.</span><div class="footer-links"><a id="footer-about" href="/about">About</a><span>BUILT TO RUN ON YOUR TERMS.</span></div></footer>
     </div>
-  </section>
-
+  </main>
 </div>
-
-<script>
-  // ── Tool definitions ───────────────────────────────────────────────────────
-  const TOOLS = [
-    {
-      id: 'merge',
-      title: 'Merge PDFs',
-      desc: 'Combine multiple PDF files into one document',
-      icon: '&#128279;', color: '#fee2e2', iconColor: '#ef4444',
-      multiple: true, accept: '.pdf',
-      endpoint: '/api/merge', fileField: 'files[]', resultFilename: 'merged.pdf',
-      optionsPanel: 'opt-none', preview: 'per-file',
-    },
-    {
-      id: 'split',
-      title: 'Split PDF',
-      desc: 'Extract pages into separate PDF files',
-      icon: '&#9986;&#65039;', color: '#dbeafe', iconColor: '#3b82f6',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/split', fileField: 'file', resultFilename: 'split.zip',
-      optionsPanel: 'opt-split', preview: 'full',
-    },
-    {
-      id: 'compress',
-      title: 'Compress PDF',
-      desc: 'Reduce file size without losing readability',
-      icon: '&#128204;', color: '#d1fae5', iconColor: '#10b981',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/compress', fileField: 'file', resultFilename: 'compressed.pdf',
-      optionsPanel: 'opt-compress', preview: 'full',
-    },
-    {
-      id: 'rotate',
-      title: 'Rotate PDF',
-      desc: 'Rotate pages by 90, 180 or 270 degrees',
-      icon: '&#128260;', color: '#fef3c7', iconColor: '#f59e0b',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/rotate', fileField: 'file', resultFilename: 'rotated.pdf',
-      optionsPanel: 'opt-rotate', preview: 'selectable',
-    },
-    {
-      id: 'pdf-to-image',
-      title: 'PDF to Image',
-      desc: 'Convert each page to PNG or JPG',
-      icon: '&#128444;&#65039;', color: '#ede9fe', iconColor: '#7c3aed',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/pdf-to-image', fileField: 'file', resultFilename: 'images.zip',
-      optionsPanel: 'opt-pdf-to-image', preview: 'full',
-    },
-    {
-      id: 'image-to-pdf',
-      title: 'Image to PDF',
-      desc: 'Convert JPG, PNG and other images to PDF',
-      icon: '&#128196;', color: '#ccfbf1', iconColor: '#0d9488',
-      multiple: true, accept: '.jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp',
-      endpoint: '/api/image-to-pdf', fileField: 'files[]', resultFilename: 'output.pdf',
-      optionsPanel: 'opt-none', preview: 'images',
-    },
-    {
-      id: 'protect',
-      title: 'Protect PDF',
-      desc: 'Encrypt your PDF with a password',
-      icon: '&#128274;', color: '#fce7f3', iconColor: '#ec4899',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/protect', fileField: 'file', resultFilename: 'protected.pdf',
-      optionsPanel: 'opt-protect', preview: 'full',
-    },
-    {
-      id: 'unlock',
-      title: 'Unlock PDF',
-      desc: 'Remove password protection from a PDF',
-      icon: '&#128275;', color: '#f1f5f9', iconColor: '#64748b',
-      multiple: false, accept: '.pdf',
-      endpoint: '/api/unlock', fileField: 'file', resultFilename: 'unlocked.pdf',
-      optionsPanel: 'opt-unlock', preview: 'full',
-    },
-  ];
-
-  // ── State ──────────────────────────────────────────────────────────────────
-  let currentTool   = null;
-  let selectedFiles = [];
-  let previewData   = {};   // fileIndex -> {pageCount, thumbnails}
-  let selectedPages = new Set();
-
-  // ── Build tool grid ────────────────────────────────────────────────────────
-  const grid = document.getElementById('tools-grid');
-  TOOLS.forEach(tool => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="icon" style="background:${tool.color};color:${tool.iconColor}">${tool.icon}</div>
-      <h3>${tool.title}</h3>
-      <p>${tool.desc}</p>
-    `;
-    card.addEventListener('click', () => openTool(tool));
-    grid.appendChild(card);
-  });
-
-  // ── Navigation ─────────────────────────────────────────────────────────────
-  function openTool(tool) {
-    currentTool   = tool;
-    selectedFiles = [];
-    previewData   = {};
-    selectedPages = new Set();
-
-    document.getElementById('home-view').style.display  = 'none';
-    document.getElementById('tool-panel').style.display = 'block';
-
-    const icon = document.getElementById('panel-icon');
-    icon.innerHTML         = tool.icon;
-    icon.style.background  = tool.color;
-    icon.style.color       = tool.iconColor;
-    document.getElementById('panel-title-text').textContent = tool.title;
-    document.getElementById('panel-desc-text').textContent  = tool.desc;
-
-    const fi = document.getElementById('file-input');
-    fi.multiple = tool.multiple;
-    fi.accept   = tool.accept;
-
-    document.getElementById('dz-hint').textContent = tool.multiple
-      ? `${tool.accept} — multiple files supported`
-      : tool.accept;
-
-    // Show correct options panel
-    document.querySelectorAll('[id^="opt-"]').forEach(el => el.style.display = 'none');
-    if (tool.optionsPanel) document.getElementById(tool.optionsPanel).style.display = '';
-
-    // Show/hide page selection controls
-    const hint     = document.getElementById('select-hint');
-    const selAll   = document.getElementById('select-all-btn');
-    const clearSel = document.getElementById('clear-sel-btn');
-    if (tool.preview === 'selectable') {
-      hint.style.display = 'inline';
-      selAll.style.display = clearSel.style.display = 'inline-block';
-    } else {
-      hint.style.display = selAll.style.display = clearSel.style.display = 'none';
-    }
-
-    renderFileList();
-    resetPreview();
-    resetResult();
-    document.getElementById('process-btn').disabled = true;
-    document.getElementById('process-btn').textContent = 'Process';
-  }
-
-  document.getElementById('back-btn').addEventListener('click', () => {
-    document.getElementById('tool-panel').style.display = 'none';
-    document.getElementById('home-view').style.display  = 'block';
-  });
-
-  // ── File selection ─────────────────────────────────────────────────────────
-  const dropZone  = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('file-input');
-
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    addFiles(Array.from(e.dataTransfer.files));
-  });
-  fileInput.addEventListener('change', () => {
-    addFiles(Array.from(fileInput.files));
-    fileInput.value = '';
-  });
-
-  async function addFiles(files) {
-    if (!currentTool.multiple) {
-      selectedFiles = [files[0]];
-      previewData   = {};
-      selectedPages = new Set();
-    } else {
-      selectedFiles = [...selectedFiles, ...files];
-    }
-
-    renderFileList();
-    document.getElementById('process-btn').disabled = selectedFiles.length === 0;
-    resetResult();
-
-    // Trigger preview depending on mode
-    if (currentTool.preview === 'full' || currentTool.preview === 'selectable') {
-      // Single file — preview all pages
-      await triggerFullPreview(selectedFiles[0], 0);
-    } else if (currentTool.preview === 'per-file') {
-      // Multi-file PDFs — preview page 1 of each new file
-      for (let i = selectedFiles.length - files.length; i < selectedFiles.length; i++) {
-        await triggerPerFilePreview(selectedFiles[i], i);
-      }
-    } else if (currentTool.preview === 'images') {
-      // Images — show directly without backend call
-      showImagePreviews();
-    }
-  }
-
-  // ── Full PDF preview (single file, all pages up to limit) ─────────────────
-  async function triggerFullPreview(file, idx) {
-    showPreviewArea(true);
-    document.getElementById('thumbs-grid').innerHTML = '';
-
-    const fd = new FormData();
-    fd.append('file', file);
-
-    try {
-      const res  = await fetch('/api/preview', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'preview failed');
-
-      previewData[idx] = data;
-      showPreviewArea(false);
-      renderThumbnails(data.thumbnails, data.pageCount, data.truncated);
-    } catch (e) {
-      showPreviewArea(false);
-      document.getElementById('preview-label').textContent = 'Preview unavailable: ' + e.message;
-    }
-  }
-
-  // ── Per-file preview (page 1 only, used for merge) ────────────────────────
-  async function triggerPerFilePreview(file, idx) {
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('limit', '1');
-
-    try {
-      const res  = await fetch('/api/preview', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) return;
-
-      previewData[idx] = data;
-      // Re-render file list to show the loaded thumbnail
-      renderFileList();
-    } catch (_) {}
-  }
-
-  // ── Image previews (image-to-pdf) ─────────────────────────────────────────
-  function showImagePreviews() {
-    showPreviewArea(false);
-    const grid = document.getElementById('thumbs-grid');
-    grid.innerHTML = '';
-    selectedFiles.forEach((file, i) => {
-      const url  = URL.createObjectURL(file);
-      const div  = document.createElement('div');
-      div.className = 'thumb';
-      div.innerHTML = `<img alt="" /><div class="thumb-num">${i + 1}</div>`;
-      const img = div.querySelector('img');
-      img.src = url;
-      img.alt = file.name; // set as a property so the filename is never parsed as markup
-      grid.appendChild(div);
-    });
-    document.getElementById('preview-label').textContent =
-      `${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''} selected`;
-  }
-
-  // ── Render page thumbnails ─────────────────────────────────────────────────
-  function renderThumbnails(thumbnails, pageCount, truncated) {
-    const label = `${pageCount} page${pageCount > 1 ? 's' : ''}` +
-                  (truncated ? ` (showing first ${thumbnails.length})` : '');
-    document.getElementById('preview-label').textContent = label;
-
-    const grid = document.getElementById('thumbs-grid');
-    grid.innerHTML = '';
-
-    thumbnails.forEach((src, i) => {
-      const pageNum = i + 1;
-      const div = document.createElement('div');
-      div.className   = 'thumb' + (currentTool.preview === 'selectable' ? ' selectable' : '');
-      div.dataset.page = pageNum;
-      div.innerHTML   = `<img alt="Page ${pageNum}" /><div class="thumb-num">${pageNum}</div>`;
-      div.querySelector('img').src = src; // server-supplied data: URL — assigned, not interpolated
-
-      if (currentTool.preview === 'selectable') {
-        div.addEventListener('click', () => togglePageSelection(div, pageNum));
-      }
-
-      grid.appendChild(div);
-    });
-
-    // For split: highlight groups
-    if (currentTool.id === 'split') {
-      updateSplitHighlight();
-    }
-  }
-
-  // ── Page selection (rotate) ────────────────────────────────────────────────
-  function togglePageSelection(div, pageNum) {
-    if (selectedPages.has(pageNum)) {
-      selectedPages.delete(pageNum);
-      div.classList.remove('selected');
-    } else {
-      selectedPages.add(pageNum);
-      div.classList.add('selected');
-    }
-    syncRotatePages();
-  }
-
-  function selectAllPages() {
-    document.querySelectorAll('.thumb.selectable').forEach(div => {
-      const p = parseInt(div.dataset.page);
-      selectedPages.add(p);
-      div.classList.add('selected');
-    });
-    syncRotatePages();
-  }
-
-  function clearPageSelection() {
-    selectedPages.clear();
-    document.querySelectorAll('.thumb.selected').forEach(d => d.classList.remove('selected'));
-    syncRotatePages();
-  }
-
-  function syncRotatePages() {
-    const field = document.getElementById('rotate-pages');
-    if (selectedPages.size === 0) {
-      field.value = 'all';
-    } else {
-      field.value = [...selectedPages].sort((a, b) => a - b).join(',');
-    }
-  }
-
-  // ── Split group highlight ──────────────────────────────────────────────────
-  const splitSpanInput = document.getElementById('split-span');
-  splitSpanInput.addEventListener('input', updateSplitHighlight);
-
-  function updateSplitHighlight() {
-    const span = parseInt(splitSpanInput.value) || 1;
-    document.querySelectorAll('.thumb').forEach(div => {
-      const page  = parseInt(div.dataset.page);
-      const group = Math.floor((page - 1) / span);
-      div.classList.remove('split-group-a', 'split-group-b');
-      div.classList.add(group % 2 === 0 ? 'split-group-a' : 'split-group-b');
-    });
-  }
-
-  // ── Render file list ───────────────────────────────────────────────────────
-  function renderFileList() {
-    const list = document.getElementById('file-list');
-    list.innerHTML = '';
-
-    const dz = document.getElementById('drop-zone');
-    if (selectedFiles.length > 0) dz.classList.add('has-files');
-    else                          dz.classList.remove('has-files');
-
-    selectedFiles.forEach((file, i) => {
-      const thumbSrc = previewData[i]?.thumbnails?.[0];
-      const thumbEl  = thumbSrc
-        ? `<img class="file-thumb" src="${thumbSrc}" alt="" />`
-        : `<div class="file-thumb-placeholder">&#128196;</div>`;
-
-      const item = document.createElement('div');
-      item.className = 'file-item';
-      // The filename comes from the user's disk — build the row as markup only
-      // where the content is ours, then set the name via textContent.
-      item.innerHTML = `
-        ${thumbEl}
-        <span class="fname"></span>
-        <span class="fsize">${formatBytes(file.size)}</span>
-        <button class="remove-file" title="Remove">&#10005;</button>
-      `;
-      item.querySelector('.fname').textContent = file.name;
-      item.querySelector('.remove-file').addEventListener('click', async () => {
-        selectedFiles.splice(i, 1);
-        delete previewData[i];
-        // Re-index previewData
-        const newPD = {};
-        Object.keys(previewData).forEach(k => {
-          const ki = parseInt(k);
-          if (ki > i) newPD[ki - 1] = previewData[k];
-          else        newPD[k]      = previewData[k];
-        });
-        previewData   = newPD;
-        selectedPages = new Set();
-        renderFileList();
-
-        if (selectedFiles.length === 0) {
-          resetPreview();
-        } else if (currentTool.preview === 'full' || currentTool.preview === 'selectable') {
-          await triggerFullPreview(selectedFiles[0], 0);
-        } else if (currentTool.preview === 'images') {
-          showImagePreviews();
-        }
-
-        document.getElementById('process-btn').disabled = selectedFiles.length === 0;
-        resetResult();
-      });
-      list.appendChild(item);
-    });
-  }
-
-  // ── Preview area helpers ───────────────────────────────────────────────────
-  function showPreviewArea(loading) {
-    document.getElementById('preview-area').style.display   = 'block';
-    document.getElementById('preview-loading').style.display = loading ? 'flex' : 'none';
-    document.getElementById('thumbs-grid').style.display    = loading ? 'none' : '';
-  }
-
-  function resetPreview() {
-    document.getElementById('preview-area').style.display  = 'none';
-    document.getElementById('preview-label').textContent   = '';
-    document.getElementById('thumbs-grid').innerHTML       = '';
-  }
-
-  function resetResult() {
-    const r = document.getElementById('result');
-    r.style.display = 'none';
-    r.innerHTML     = '';
-  }
-
-  // ── Process ────────────────────────────────────────────────────────────────
-  document.getElementById('process-btn').addEventListener('click', async () => {
-    if (!currentTool || selectedFiles.length === 0) return;
-
-    const btn = document.getElementById('process-btn');
-    btn.disabled  = true;
-    btn.innerHTML = '<span class="spinner"></span> Processing...';
-    resetResult();
-
-    const fd = new FormData();
-
-    if (currentTool.multiple) {
-      selectedFiles.forEach(f => fd.append('files[]', f));
-    } else {
-      fd.append('file', selectedFiles[0]);
-    }
-
-    switch (currentTool.id) {
-      case 'split':
-        fd.append('span', document.getElementById('split-span').value || '1');
-        break;
-      case 'compress':
-        fd.append('quality', document.getElementById('compress-quality').value);
-        break;
-      case 'rotate':
-        fd.append('degrees', document.getElementById('rotate-degrees').value);
-        fd.append('pages',   document.getElementById('rotate-pages').value || 'all');
-        break;
-      case 'pdf-to-image':
-        fd.append('format', document.getElementById('pti-format').value);
-        fd.append('dpi',    document.getElementById('pti-dpi').value);
-        break;
-      case 'protect':
-        fd.append('password', document.getElementById('protect-password').value);
-        break;
-      case 'unlock':
-        fd.append('password', document.getElementById('unlock-password').value);
-        break;
-    }
-
-    try {
-      const res = await fetch(currentTool.endpoint, { method: 'POST', body: fd });
-      if (res.ok) {
-        const blob = await res.blob();
-        showSuccess(URL.createObjectURL(blob), currentTool.resultFilename);
-      } else {
-        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
-        showError(data.error || 'Processing failed');
-      }
-    } catch (err) {
-      showError('Network error: ' + err.message);
-    } finally {
-      btn.disabled  = false;
-      btn.textContent = 'Process';
-    }
-  });
-
-  function showSuccess(url, filename) {
-    const r = document.getElementById('result');
-    r.style.display = 'block';
-    r.innerHTML = `
-      <div class="result-box result-success">
-        <strong>&#10003; Done! Your file is ready.</strong>
-        <a class="btn btn-success" style="margin-top:0.25rem"></a>
-      </div>
-    `;
-    const a = r.querySelector('a');
-    a.href        = url;
-    a.download    = filename;
-    a.textContent = 'Download ' + filename;
-  }
-
-  // msg can carry text that originated server-side, so it is inserted as text
-  // rather than markup.
-  function showError(msg) {
-    const r = document.getElementById('result');
-    r.style.display = 'block';
-    r.innerHTML = `
-      <div class="result-box result-error">
-        <strong>&#10007; Processing failed</strong>
-        <span></span>
-      </div>
-    `;
-    r.querySelector('span').textContent = msg;
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  function formatBytes(bytes) {
-    if (bytes < 1024)        return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-</script>
 </body>
 </html>
