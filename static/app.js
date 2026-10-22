@@ -216,7 +216,7 @@ function openTool(tool, updateHistory = true, moveFocus = true) {
   updateUploadHint();
   document.querySelectorAll('[id^="opt-"]').forEach(el => el.style.display = 'none');
   $(tool.optionsPanel).style.display = '';
-  $('opt-none').textContent = tool.id === 'merge' ? 'Add at least two PDFs. Files will be merged from top to bottom in the order shown.' : 'Add your images in the order you want them to appear. Each image becomes one page.';
+  $('opt-none').textContent = tool.id === 'merge' ? 'Add at least two PDFs. Files will be merged from top to bottom in the order shown.' : 'Add your images, then use the up/down controls to set their page order. Each image becomes one page.';
   $('output-format').textContent = tool.resultFilename.endsWith('.zip') ? 'ZIP archive' : 'PDF document';
   const selectable = tool.preview === 'selectable';
   $('select-hint').style.display = selectable ? 'inline' : 'none';
@@ -346,13 +346,14 @@ function updateFileOrderControls() {
 }
 
 function moveFile(index, direction) {
-  if (processing || currentTool?.id !== 'merge') return;
+  if (processing || !['merge', 'image-to-pdf'].includes(currentTool?.id)) return;
   const target = index + direction;
   if (index < 0 || index >= selectedFiles.length || target < 0 || target >= selectedFiles.length) return;
   const [file] = selectedFiles.splice(index, 1);
   selectedFiles.splice(target, 0, file);
   resetResult();
   renderFileList();
+  if (currentTool.id === 'image-to-pdf') refreshPreviews();
   $('file-order-status').textContent = `${file.name} moved to position ${target + 1} of ${selectedFiles.length}.`;
   const row = $('file-list').children[target];
   const action = direction < 0 ? 'up' : 'down';
@@ -365,9 +366,12 @@ function renderFileList() {
   const focused = document.activeElement;
   const focusIndex = focused.closest('.file-item')?.dataset.index;
   const focusAction = focused.dataset.fileAction;
-  const reorderable = currentTool?.id === 'merge';
+  const reorderable = ['merge', 'image-to-pdf'].includes(currentTool?.id);
   $('file-list').replaceChildren();
   $('file-order-hint').hidden = !reorderable || selectedFiles.length < 2;
+  $('file-order-hint').textContent = currentTool?.id === 'image-to-pdf'
+    ? 'Use the arrows to set the image order. Each image becomes a PDF page from top to bottom.'
+    : 'Use the arrows to change the merge order. Files are merged from top to bottom.';
   if (!reorderable || !selectedFiles.length) $('file-order-status').textContent = '';
   $('drop-zone').classList.toggle('has-files', selectedFiles.length > 0);
   $('file-count').textContent = selectedFiles.length ? `${String(selectedFiles.length).padStart(2, '0')} selected · ${formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0))}` : 'No files selected';
